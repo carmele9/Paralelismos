@@ -10,7 +10,6 @@
 # multiplicación de matrices debe realizarse en python puro, sin utilizar las funciones de
 # numpy.
 
-import numpy as np
 from numpy.random import rand
 
 

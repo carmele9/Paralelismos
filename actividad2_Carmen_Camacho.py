@@ -51,7 +51,7 @@ def multiplicar_bloques(bloque1, bloque2):
     return resultado
 
 
-# Multiplica matrices divididas en bloques de tamaño M × M.
+# Se multiplican las matrices divididas en bloques de tamaño M × M.
 def multiplicar_matrices_bloques(matriz_a, matriz_b, n, m):
     matriz_resultado = []
     # Se genera por bloques la matriz con el resultado inicializándola a zero
@@ -66,7 +66,13 @@ def multiplicar_matrices_bloques(matriz_a, matriz_b, n, m):
         matriz_resultado.append(fila_bloques)
     for i in range(n):
         for j in range(n):
-            bloque_resultado = [[0] * m for _ in range(m)]
+            bloque_resultado = []
+            # Se crea la matriz bloqueo_resultado
+            for z in range(m):
+                fila = []
+                for y in range(m):
+                    fila.append(0)
+                bloque_resultado.append(fila)
             for k in range(n):
                 bloque_producto = multiplicar_bloques(matriz_a[i][k], matriz_b[k][j])
                 # Se suma al bloque resultado
