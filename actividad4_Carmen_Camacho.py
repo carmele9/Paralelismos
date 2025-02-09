@@ -180,3 +180,18 @@ df_mensual = df_mensual.reset_index().set_index('month')
 # Se muestra el DataFrame con los datos mensuales
 print("Datos agregados por mes:")
 print(df_mensual)
+
+# Convertir los índices a datetime para evitar problemas de frecuencia
+df_semanal.index = df_semanal.index.to_timestamp()
+df_mensual.index = df_mensual.index.to_timestamp()
+
+# Unir df_semanal y df_mensual en un solo DataFrame
+df_combinado = pd.concat([df_semanal, df_mensual])
+
+# Ordenar por índice (fecha)
+df_combinado = df_combinado.sort_index()
+
+# Mostrar el DataFrame final
+print("Datos combinados (semanal y mensual):")
+print(df_combinado)
+
