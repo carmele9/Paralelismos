@@ -180,4 +180,3 @@ df_mensual = df_mensual.reset_index().set_index('month')
 # Se muestra el DataFrame con los datos mensuales
 print("Datos agregados por mes:")
 print(df_mensual)
-
