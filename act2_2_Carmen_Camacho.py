@@ -71,7 +71,7 @@ async def obtener_datos_simbolo(symbol):
 # Se descarga y combinan los datos de todos los símbolos en paralelo
 async def procesar_datos(symbols):
     df_principal = pd.DataFrame()
-    tareas = [obtener_datos_simbolo(symbol) for symbol in symbols]
+    tareas = [asyncio.create_task(obtener_datos_simbolo(symbol)) for symbol in symbols]
     resultados = await asyncio.gather(*tareas)
     resultados = [df for df in resultados if df is not None]
 
@@ -122,42 +122,44 @@ async def combinar_datos(df_semanal, df_mensual):
 
 # Se emplea una función asincrónica para realizar el programa
 async def main():
-    print("Descargando datos en paralelo...")
-    df_principal = await procesar_datos(symbols)
+    try:
+        print("Descargando datos en paralelo...")
+        df_principal = await procesar_datos(symbols)
 
-    if df_principal.empty:
-        print("No se obtuvieron datos. Verificar conexión o API.")
-        return
+        if df_principal.empty:
+            print("No se obtuvieron datos. Verificar conexión o API.")
+            return
 
-    print("\nDatos combinados:")
-    print(df_principal.head())
+        print("\nDatos combinados:")
+        print(df_principal.head())
 
-    # Se ejecutan las funciones de agregación en paralelo
-    tarea_semanal = asyncio.create_task(agregar_datos_semanales(df_principal))
-    tarea_mensual = asyncio.create_task(agregar_datos_mensuales(df_principal))
-    df_semanal, df_mensual = await asyncio.gather(tarea_semanal, tarea_mensual)
+        # Se ejecutan las funciones de agregación en paralelo
+        tarea_semanal = asyncio.create_task(agregar_datos_semanales(df_principal))
+        tarea_mensual = asyncio.create_task(agregar_datos_mensuales(df_principal))
+        df_semanal, df_mensual = await asyncio.gather(tarea_semanal, tarea_mensual)
 
-    print("\nDatos agregados por semana:")
-    print(df_semanal.head())
+        print("\nDatos agregados por semana:")
+        print(df_semanal.head())
 
-    print("\nDatos agregados por mes:")
-    print(df_mensual.head())
+        print("\nDatos agregados por mes:")
+        print(df_mensual.head())
 
-    df_combinado = await combinar_datos(df_semanal, df_mensual)
-    print("\nDatos combinados (semanal y mensual):")
-    print(df_combinado.head())
+        df_combinado = await combinar_datos(df_semanal, df_mensual)
+        print("\nDatos combinados (semanal y mensual):")
+        print(df_combinado.head())
 
-    # Se guardan los resultados usando to_thread()
-    await asyncio.to_thread(df_principal.to_csv, "datos_diarios.csv")
-    await asyncio.to_thread(df_semanal.to_csv, "datos_semanales.csv")
-    await asyncio.to_thread(df_mensual.to_csv, "datos_mensuales.csv")
-    await asyncio.to_thread(df_combinado.to_csv, "datos_combinados.csv")
+        # Se guardan los resultados usando to_thread()
+        await asyncio.to_thread(df_principal.to_csv, "datos_diarios.csv")
+        await asyncio.to_thread(df_semanal.to_csv, "datos_semanales.csv")
+        await asyncio.to_thread(df_mensual.to_csv, "datos_mensuales.csv")
+        await asyncio.to_thread(df_combinado.to_csv, "datos_combinados.csv")
 
-    print("\nProcesamiento completado y datos guardados.")
+        print("\nProcesamiento completado y datos guardados.")
+    except Exception as e:
+        print(f"Error en la ejecución: {e}")
 
 # Se ejecuta el programa
-    if __name__ == "__main__":
-        print("HOLA")
-        if sys.platform.startswith("win"):  # Debido a un problema con mi entorno y Windows
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        asyncio.run(main())
+if __name__ == "__main__":
+    if sys.platform.startswith("win"):  # Debido a un problema con mi entorno y Windows
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    asyncio.run(main())
