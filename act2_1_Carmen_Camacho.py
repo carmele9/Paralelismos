@@ -10,6 +10,8 @@
 # a. Realizar una versión donde cada función sea creada mediante el mecanismo
 # create_task()
 
+# aiohttp con create_task() sin to_thread() (usando métodos asíncronos nativos de aiohttp
+
 
 import aiohttp
 import asyncio
