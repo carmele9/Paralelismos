@@ -71,6 +71,7 @@ async def obtener_datos_simbolo(symbol):
 # Se descarga y combinan los datos de todos los símbolos en paralelo
 async def procesar_datos(symbols):
     df_principal = pd.DataFrame()
+    # Se usa create_task()
     tareas = [asyncio.create_task(obtener_datos_simbolo(symbol)) for symbol in symbols]
     resultados = await asyncio.gather(*tareas)
     resultados = [df for df in resultados if df is not None]
