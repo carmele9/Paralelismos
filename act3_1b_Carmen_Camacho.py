@@ -15,6 +15,9 @@
 # Dado que no sabía en el momento de realizar la actividad
 # si se referia a multiplicacion tradicional o bloques, hice las dos.
 
+# Multiplicación en paralelo: Se crean n^2 hilos, uno por cada elemento de la matriz resultante.
+# Suma en un hilo: Después de calcular todos los productos parciales, un único hilo suma todos los bloques.
+
 from numpy.random import rand
 import threading
 
