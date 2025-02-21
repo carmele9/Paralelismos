@@ -13,13 +13,18 @@
 # de salida se calcule en una función.
 
 # Para esta actividad:
-# Usamos multiprocessing.Pool.map, donde cada bloque se calcula de forma independiente:
-# No usamos sincronización manual, porque cada bloque es independiente de los demás.
-# Uso de cpu_count() para elegir el número de procesos óptimo:
-# Esto garantiza que el código se ejecuta eficientemente en cualquier hardware.
-# Optimización del manejo de resultados:
-# Cada resultado se guarda en matriz_resultado[i][j] de forma acumulativa.
-
+# Procesos individuales con multiprocessing.Process:
+# Se crea un proceso para cada tarea de multiplicación de bloques.
+# Cada proceso se ejecuta de manera independiente y paralela.
+# proceso.start(): Se inicia cada proceso.
+# proceso.join(): Espera a que todos los procesos terminen antes de continuar,
+# asegurando que el cálculo esté completo antes de imprimir los resultados.
+# Uso de multiprocessing.Manager: Se crea una lista gestionada que se compartirá entre los procesos.
+# Esto permite que cada proceso pueda actualizar la matriz de resultados sin que se produzcan problemas de concurrencia.
+# La matriz de resultados se genera usando manager.list()
+# para asegurar que sea accesible por todos los procesos de manera segura.
+# Al final de la función multiplicar_matrices_bloques, se convierte la lista gestionada por Manager en una lista normal
+# para que sea más fácil trabajar con ella.
 
 import random
 import multiprocessing
@@ -50,62 +55,49 @@ def generar_matriz_bloques(n, m):
 
 
 # Se multiplican los dos bloques M × M mediante la multiplicación tradicional
-def multiplicar_bloques(args):
-    bloque1, bloque2 = args  # Se reciben los bloques como una tupla
+def multiplicar_bloques(bloque1, bloque2, resultado, i, j):
     size = len(bloque1)
 
     # Se inicializa la matriz con ceros
-    resultado = []
+    bloque_resultado = []
     for _ in range(size):
         fila = [0] * size
-        resultado.append(fila)
+        bloque_resultado.append(fila)
 
-    for i in range(size):
-        for j in range(size):
-            for k in range(size):
-                resultado[i][j] += bloque1[i][k] * bloque2[k][j]
+    for x in range(size):
+        for y in range(size):
+            for z in range(size):
+                bloque_resultado[x][y] += bloque1[x][z] * bloque2[z][y]
 
-    return resultado
+    # Se asigna el resultado de la multiplicación al bloque correspondiente en la matriz resultado
+    resultado[i][j] = bloque_resultado
 
 
-# Se multiplican las matrices divididas en bloques de tamaño M × M en paralelo
+# Se multiplican las matrices divididas en bloques de tamaño M × M en paralelo sin Pool
 def multiplicar_matrices_bloques(matriz_a, matriz_b, n, m):
-    matriz_resultado = []
-    for _ in range(n):
-        fila = [None] * n
-        matriz_resultado.append(fila)
+    # Se crea un Manager para compartir los datos entre procesos
+    with multiprocessing.Manager() as manager:
+        # Se crea la matriz resultado compartida
+        matriz_resultado = manager.list([manager.list([None] * n) for _ in range(n)])
 
-    # Se preparan los argumentos para la multiplicación en paralelo
-    tareas = []
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                tarea = (matriz_a[i][k], matriz_b[k][j])  # Tupla de bloques a multiplicar
-                tareas.append(tarea)
+        # Lista de procesos que se van a ejecutar en paralelo
+        procesos = []
 
-    # Se ejecuta la multiplicación en paralelo
-    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        resultados = pool.map(multiplicar_bloques, tareas)
+        for i in range(n):
+            for j in range(n):
+                for k in range(n):
+                    # Se crea un nuevo proceso para cada tarea de multiplicación de bloques
+                    proceso = multiprocessing.Process(target=multiplicar_bloques,
+                                                      args=(matriz_a[i][k], matriz_b[k][j], matriz_resultado, i, j))
+                    procesos.append(proceso)
+                    proceso.start()
 
-    # Se construye la matriz con el resultado a partir de los resultados
-    index = 0
-    for i in range(n):
-        for j in range(n):
-            if matriz_resultado[i][j] is None:
-                bloque = []
-                for _ in range(m):
-                    fila = [0] * m
-                    bloque.append(fila)
-                matriz_resultado[i][j] = bloque
+        # Se espera a que todos los procesos terminen
+        for proceso in procesos:
+            proceso.join()
 
-            # Se suman los bloques que corresponden a cada posición (i, j)
-            for x in range(m):
-                for y in range(m):
-                    matriz_resultado[i][j][x][y] += resultados[index][x][y]
-
-            index += 1
-
-    return matriz_resultado
+        # Se convierte la lista gestionada por el Manager en una lista normal para trabajar con ella
+        return [list(fila) for fila in matriz_resultado]
 
 
 #  Se imprime una matriz completa de bloques
@@ -135,7 +127,7 @@ if __name__ == "__main__":
     matriz_A = generar_matriz_bloques(N, M)
     matriz_B = generar_matriz_bloques(N, M)
 
-    # Se multiplican las matrices por bloques en paralelo
+    # Se multiplican las matrices por bloques en paralelo sin Pool
     resultado = multiplicar_matrices_bloques(matriz_A, matriz_B, N, M)
 
     # Se muestran los resultados
