@@ -20,7 +20,6 @@
 # Optimización del manejo de resultados:
 # Cada resultado se guarda en matriz_resultado[i][j] de forma acumulativa.
 
-
 import random
 import multiprocessing
 

@@ -73,7 +73,7 @@ def multiplicar_bloques(bloque1, bloque2, resultado, i, j):
     resultado[i][j] = bloque_resultado
 
 
-# Se multiplican las matrices divididas en bloques de tamaño M × M en paralelo sin Pool
+# Se multiplican las matrices divididas en bloques de tamaño M × M en paralelo
 def multiplicar_matrices_bloques(matriz_a, matriz_b, n, m):
     # Se crea un Manager para compartir los datos entre procesos
     with multiprocessing.Manager() as manager:

@@ -14,21 +14,31 @@
 # consumidas para realizar las sumas y calcular el resultado final.
 
 # Para esta actividad:
-# Se utiliza multiprocessing.Queue para que los productos de los bloques sean almacenados y luego sumados.
-# Se implementan procesos separados:
-# Productor: Calcula productos de bloques y los pone en la cola.
-# Consumidor: Suma los bloques del resultado final.
+# Cada bloque de la matriz se multiplica en un proceso independiente y se almacena en
+# una estructura de datos compartida para evitar conflictos entre procesos.
+# Se divide la matriz en bloques de tamaño `M × M`.
+# Cada bloque se almacena en una estructura de datos bidimensional.
+# Se crean procesos (`multiprocessing.Process`) para calcular el producto de los bloques correspondientes.
+# Cada proceso recibe un bloque de la matriz A y un bloque de la matriz B y calcula su producto.
+# El resultado se almacena en una estructura de datos compartida (`multiprocessing.Array`).
+# Se usa `multiprocessing.Array(ctypes.c_double)` para almacenar la matriz con el resultado en un array plano compartido
+# Se sincroniza el acceso con `multiprocessing.Lock()` para evitar condiciones de carrera.
+# Se intentó utilizar `multiprocessing.Queue()` para la comunicación entre procesos pero:
+# Se detectaron bloqueos debido a la naturaleza síncrona del consumidor, lo que generaba cuellos de botella
+# En algunos casos, los bloques de resultado no se almacenaban correctamente, generando matrices vacías.
+# Finalmente, la constante transferencia de datos entre procesos usando la cola reducía el rendimiento.
+
 
 import random
 import multiprocessing
-
+import ctypes
 
 # Se genera un bloque de tamaño M × M con valores aleatorios
 def generar_bloque(m, min_val=0, max_val=10):
     matriz = []
-    for i in range(m):
+    for _ in range(m):
         fila = []
-        for j in range(m):
+        for _ in range(m):
             valor = random.uniform(min_val, max_val)
             fila.append(valor)
         matriz.append(fila)
@@ -38,21 +48,23 @@ def generar_bloque(m, min_val=0, max_val=10):
 # Se genera una matriz de bloques (N × N) donde cada bloque es de tamaño (M × M)
 def generar_matriz_bloques(n, m):
     matriz = []
-    for i in range(n):
+    for _ in range(n):
         fila = []
-        for j in range(n):
-            fila.append(generar_bloque(m))
+        for _ in range(n):
+            bloque = generar_bloque(m)
+            fila.append(bloque)
         matriz.append(fila)
     return matriz
 
 
-# Se multiplican los dos bloques M × M mediante la multiplicación tradicional
 def multiplicar_bloques(bloque1, bloque2):
     size = len(bloque1)
+    # Se inicializa la matriz con ceros
     resultado = []
-    for i in range(size):
-        fila = [0] * size  # Se inicializa la matriz con ceros
+    for _ in range(size):
+        fila = [0] * size
         resultado.append(fila)
+
     for i in range(size):
         for j in range(size):
             for k in range(size):
@@ -60,97 +72,67 @@ def multiplicar_bloques(bloque1, bloque2):
     return resultado
 
 
-# Proceso productor: Calcula productos de bloques y los pone en la cola
-def proceso_productor(matriz_a, matriz_b, n, m, queue):
+def worker_multiplicar(i, j, k, bloque_a, bloque_b, resultado_matrices, lock, n, m):
+    bloque_producto = multiplicar_bloques(bloque_a, bloque_b)
+
+    with lock:  # Bloqueo para evitar condiciones de carrera
+        for x in range(m):
+            for y in range(m):
+                resultado_matrices[(i * n + j) * (m * m) + (x * m + y)] += bloque_producto[x][y]
+
+
+# Se multiplican las matrices divididas en bloques de tamaño M × M en paralelo
+def multiplicar_matrices_bloques(matriz_a, matriz_b, n, m):
+    # Se crea un array compartido para la matriz resultado
+    resultado_matrices = multiprocessing.Array(ctypes.c_double, n * n * m * m, lock=False)
+    lock = multiprocessing.Lock()
+    procesos = []
+
     for i in range(n):
         for j in range(n):
             for k in range(n):
-                bloque_producto = multiplicar_bloques(matriz_a[i][k], matriz_b[k][j])
-                print(f"Producto de bloques ({i},{k}) y ({k},{j}):")
-                for fila in bloque_producto:
-                    print(fila)
-                queue.put((i, j, bloque_producto))  # Enviar índice y bloque a la cola
-    queue.put(None)  # Señal de que el productor ha terminado
+                p = multiprocessing.Process(
+                    target=worker_multiplicar,
+                    args=(i, j, k, matriz_a[i][k], matriz_b[k][j], resultado_matrices, lock, n, m)
+                )
+                procesos.append(p)
+                p.start()
 
+    for p in procesos:
+        p.join()
 
-# Proceso consumidor: Suma los productos de bloques de la cola
-def proceso_consumidor(n, m, queue, matriz_resultado):
-    while True:
-        item = queue.get()
-        if item is None:
-            break  # Señal para terminar
+    # Se convierte el array plano de vuelta a una matriz de bloques
+    resultado_final = [[[[
+        resultado_matrices[(i * n + j) * (m * m) + (x * m + y)]
+        for y in range(m)] for x in range(m)]
+        for j in range(n)] for i in range(n)]
 
-        i, j, bloque_producto = item
-
-        # Inicializar el bloque en la matriz resultado si es necesario
-        if matriz_resultado[i][j] is None:
-            matriz_resultado[i][j] = [[0] * m for _ in range(m)]
-
-        # Sumar los valores del bloque recibido
-        for x in range(m):
-            for y in range(m):
-                matriz_resultado[i][j][x][y] += bloque_producto[x][y]
-
-        # Imprimir matriz resultado intermedia
-        print(f"\nMatriz resultado después de sumar bloque ({i},{j}):")
-        imprimir_matriz_bloques(matriz_resultado, n, m, "Resultado Intermedio")
-
+    return resultado_final
 
 # Se imprime una matriz completa de bloques
 def imprimir_matriz_bloques(matriz, n, m, nombre="Matriz"):
     print(f"\n{nombre}:")
     matriz_completa = []
     for i in range(n):
-        for x in range(m):  # Se itera sobre las filas dentro del bloque
+        for x in range(m):
             fila = []
             for j in range(n):
-                if matriz[i][j] is not None:  # Asegurarse de que el bloque no sea None
-                    fila.extend(matriz[i][j][x])  # Se agrega una fila de cada bloque
+                fila.extend(matriz[i][j][x])
             matriz_completa.append(fila)
-
     for fila in matriz_completa:
-        valores_formateados = []
-        for num in fila:
-            valores_formateados.append(f"{num:.2f}")
-        print("  ".join(valores_formateados))
+        print("  ".join(f"{num:.2f}" for num in fila))
 
 
-# Función principal para realizar la multiplicación por bloques
-def multiplicar_matrices_bloques(matriz_a, matriz_b, n, m):
-    queue = multiprocessing.Queue()
-
-    # Inicializar la matriz de resultados con None
-    matriz_resultado = [[None for _ in range(n)] for _ in range(n)]
-
-    # Crear y lanzar los procesos
-    productor = multiprocessing.Process(target=proceso_productor, args=(matriz_a, matriz_b, n, m, queue))
-    consumidor = multiprocessing.Process(target=proceso_consumidor, args=(n, m, queue, matriz_resultado))
-
-    productor.start()
-    consumidor.start()
-
-    productor.join()
-
-    # Señal de terminación para el consumidor
-    queue.put(None)
-    consumidor.join()
-
-    return matriz_resultado
-
-
+#  Se ejecuta el programa
 if __name__ == "__main__":
-
     N = 2  # Cantidad de bloques por fila/columna
     M = 3  # Tamaño de cada bloque
 
-    # Se generan las matrices de bloques
     matriz_A = generar_matriz_bloques(N, M)
     matriz_B = generar_matriz_bloques(N, M)
 
-    # Se multiplican las matrices por bloques en paralelo
     resultado = multiplicar_matrices_bloques(matriz_A, matriz_B, N, M)
 
-    # Se muestran los resultados
     imprimir_matriz_bloques(matriz_A, N, M, "Matriz A")
     imprimir_matriz_bloques(matriz_B, N, M, "Matriz B")
     imprimir_matriz_bloques(resultado, N, M, "Matriz Resultado")
